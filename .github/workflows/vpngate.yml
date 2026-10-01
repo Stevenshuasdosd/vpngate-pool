@@ -1,0 +1,53 @@
+name: VPN Gate Node Check
+
+on:
+  schedule:
+    # 每 3 小时一次（每天 8 次，每月约 240 次，远低于 Actions 免费额度 2000 分钟/月）
+    # 不要改成 30 分钟一次：1440 次/月 × 每次约 3 分钟会打爆免费额度
+    - cron: "0 */3 * * *"
+  workflow_dispatch:  # 允许手动触发
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: vpngate-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch + check + build pages
+        run: python3 scripts/vpngate_check.py
+        env:
+          # 可选：填入自己部署的 check Worker 地址后，检测走 CF 边缘视角
+          # （与 edgetunnel 实际出网一致，更贴近链式代理的真实可用性）。
+          # 格式示例: https://xxx.workers.dev/check?sstp=vpn:vpn@
+          # 留空则自动 fallback 到 runner 直连 TCP+TLS 检测，无需额外部署。
+          CHECK_WORKER: ""
+          CHECK_CONCURRENCY: "32"
+          CHECK_TIMEOUT: "90"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "public"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
