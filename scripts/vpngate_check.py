@@ -246,12 +246,9 @@ def main() -> int:
     # 并把 $sstp:// 解析为 SSTP 链式代理（账号密码均为 vpn）。
     # 流量路径: 客户端 → edgetunnel(CF) → SSTP → VPN Gate 节点 → 互联网
     with open(os.path.join(PUBLIC, "edgetunnel-nodes.txt"), "w", encoding="utf-8") as f:
-        f.write(
-            "# edgetunnel $sstp:// 链式代理节点源（由 FreeStack L2 pipeline 自动生成）\n"
-            f"# 更新: {now} UTC, 共 {len(ok_rows)} 个\n"
-            "# 用法: 在 edgetunnel 后台 → 本地IP库/ADD.txt 加一行本文件的 URL\n"
-            "# 占位 UUID(00000000-...) 与 example.com 由 edgetunnel 自动替换为真实值\n"
-        )
+        # 注意: 文件必须以 vless:// 行开头，不能加 # 注释头。
+        # edgetunnel 的请求优选API用 content.split('#')[0].includes('://') 判定是否为节点LINK，
+        # 行首的 # 注释会让整份文件被误判为纯IP列表，导致订阅为空。
         for r in ok_rows:
             remark = f"{r['country_short']}-{r['latency_ms']}ms"
             f.write(
