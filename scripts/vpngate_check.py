@@ -240,21 +240,20 @@ def main() -> int:
             flag = "TLS" if r["tls_ok"] else "TCP"
             f.write(f"{r['ip']}:443  # {r['country_short']} {r['latency_ms']}ms [{flag}] {r['host']}\n")
 
-    # edgetunnel 链式代理订阅源：每行一个 vless 占位链接，备注嵌入 $sstp:// 标记。
-    # 用户在 edgetunnel 后台本地IP库/ADD.txt 里加一行本文件的 URL，
-    # edgetunnel 每次生成订阅时实时拉取，自动替换占位 UUID/域名为真实值，
-    # 并把 $sstp:// 解析为 SSTP 链式代理（账号密码均为 vpn）。
-    # 流量路径: 客户端 → edgetunnel(CF) → SSTP → VPN Gate 节点 → 互联网
+    # edgetunnel 链式代理订阅源：每行一个"优选 IP 行"（不是 vless 链接！）。
+    # 格式: example.com:443#备注$sstp://vpn:vpn@<节点IP>:443
+    # 原理: edgetunnel 把这类行识别为"优选 IP"，生成订阅时按原生机制处理——
+    # 备注里的 $sstp:// 被解析为 SSTP 链式代理并编码进 path=/video/<...>，
+    # 占位域名 example.com 被替换为 Worker 真实域名，生成标准的
+    # vless://uuid@host:443?security=tls&type=ws&path=/video/... 链接。
+    # 客户端 → edgetunnel(CF, WS+TLS) → SSTP → VPN Gate 节点 → 互联网。
+    # 注意: 文件内容在第一个 '#' 之前不能出现 '://'，否则会被误判为节点 LINK
+    # 而原样透传（链式代理不生效、还缺 TLS 参数——2026-10-02 踩过的坑）。
+    # 用户在 edgetunnel 后台本地IP库/ADD.txt 里加一行本文件的 URL，一次配置永久自动。
     with open(os.path.join(PUBLIC, "edgetunnel-nodes.txt"), "w", encoding="utf-8") as f:
-        # 注意: 文件必须以 vless:// 行开头，不能加 # 注释头。
-        # edgetunnel 的请求优选API用 content.split('#')[0].includes('://') 判定是否为节点LINK，
-        # 行首的 # 注释会让整份文件被误判为纯IP列表，导致订阅为空。
         for r in ok_rows:
             remark = f"{r['country_short']}-{r['latency_ms']}ms"
-            f.write(
-                "vless://00000000-0000-4000-8000-000000000000@example.com:443"
-                f"#{remark}$sstp://vpn:vpn@{r['ip']}:443\n"
-            )
+            f.write(f"example.com:443#{remark}$sstp://vpn:vpn@{r['ip']}:443\n")
 
     for f_ in os.listdir(OVPN_DIR):
         if f_.endswith(".ovpn"):
